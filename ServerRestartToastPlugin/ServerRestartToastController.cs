@@ -18,16 +18,12 @@ public class ServerRestartToastController : ControllerBase
     [HttpGet("/serverrestarttoast")]
     public string ShowRestartToast()
     {
-        Log.Debug("API request erhalten!");
         if (EntryCarManager != null)
         {
-            Log.Debug("EntryCarManager ist nicht null --> Sende jetzt Pakete an Clients");
-            Log.Debug($"Es sind {EntryCarManager.EntryCars.Count()} auf dem Server.");
             foreach (var entryCar in EntryCarManager.EntryCars)
             {
                 if (entryCar.Client != null)
                 {
-                    Log.Debug($"Der aktuelle Client ist: {entryCar.Client}");
                     entryCar.Client.SendPacket(new ServerRestartToast
                     {
                         TimeUntilRestartInMin = 5
