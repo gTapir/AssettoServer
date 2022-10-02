@@ -13,7 +13,7 @@ public class ServerRestartToast : IOutgoingNetworkPacket
         writer.Write<byte>(0x03);
         writer.Write<byte>(255);
         writer.Write<ushort>(60000);
-        writer.Write(0xC069E2E7);
+        writer.Write(0x72DC06D);
         writer.Write(TimeUntilRestartInMin);
     }
 }
