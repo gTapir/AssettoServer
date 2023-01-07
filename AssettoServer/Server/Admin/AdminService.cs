@@ -32,14 +32,14 @@ public class AdminService : IAdminService
         if (!_configuration.Extra.UseSteamAuth && _userGroup is IListableUserGroup listableUserGroup && listableUserGroup.List.Count > 0)
         {
             const string errorMsg =
-                "Admin whitelist is enabled but Steam auth is disabled. This is unsafe because it allows players to gain admin rights by SteamID spoofing. More info: https://github.com/compujuckel/AssettoServer/wiki/Common-configuration-errors#unsafe-admin-whitelist";
+                "Admin whitelist is enabled but Steam auth is disabled. This is unsafe because it allows players to gain admin rights by SteamID spoofing. More info: https://assettoserver.org/docs/common-configuration-errors#unsafe-admin-whitelist";
             if (_configuration.Extra.IgnoreConfigurationErrors.UnsafeAdminWhitelist)
             {
                 Log.Warning(errorMsg);
             }
             else
             {
-                throw new ConfigurationException(errorMsg);
+                throw new ConfigurationException(errorMsg) { HelpLink = "https://assettoserver.org/docs/common-configuration-errors#unsafe-admin-whitelist" };
             }
         }
     }

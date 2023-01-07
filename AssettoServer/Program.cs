@@ -1,23 +1,19 @@
-﻿using AssettoServer.Server;
-using AssettoServer.Server.Configuration;
+﻿using AssettoServer.Server.Configuration;
 using System;
 using System.Globalization;
 using System.Threading.Tasks;
-using App.Metrics;
-using App.Metrics.AspNetCore;
-using App.Metrics.Formatters.Prometheus;
 using AssettoServer.Network.Http;
-using AssettoServer.Server.Plugin;
-using Autofac;
+using AssettoServer.Utils;
 using Autofac.Extensions.DependencyInjection;
 using CommandLine;
+using FluentValidation;
 using JetBrains.Annotations;
-using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.Grafana.Loki;
+using Parser = CommandLine.Parser;
 
 namespace AssettoServer;
 
@@ -34,13 +30,24 @@ internal static class Program
 
         [Option('e', Required = false, SetName = "Content Manager compatibility", HelpText = "Path to entry list")]
         public string EntryListPath { get; set; } = "";
+
+        [Option("plugins-from-workdir", Required = false, HelpText = "Additionally load plugins from working directory")]
+        public bool LoadPluginsFromWorkdir { get; set; } = false;
     }
         
     internal static async Task Main(string[] args)
     {
-        // Prevent parsing errors in floats because some cultures use "," instead of "." as decimal separator
-        CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
-        CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+        ValidatorOptions.Global.DisplayNameResolver = (_, member, _) =>
+        {
+            foreach (var attr in member!.GetCustomAttributes(true))
+            {
+                if (attr is IniFieldAttribute iniAttr)
+                {
+                    return iniAttr.Key;
+                }
+            }
+            return member.Name;
+        }; 
             
         var options = Parser.Default.ParseArguments<Options>(args).Value;
         if (options == null) return;
@@ -49,65 +56,74 @@ internal static class Program
         
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
+            .MinimumLevel.Override("AssettoServer.Network.Http.Authentication.ACClientAuthenticationHandler", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
             .MinimumLevel.Override("Grpc", LogEventLevel.Warning)
             .WriteTo.Async(a => a.Console())
             .WriteTo.File($"logs/{logPrefix}-.txt",
                 rollingInterval: RollingInterval.Day)
             .CreateLogger();
-
-        var config = new ACServerConfiguration(options.Preset, options.ServerCfgPath, options.EntryListPath);
         
-        if (config.Extra.LokiSettings != null
-            && !string.IsNullOrEmpty(config.Extra.LokiSettings.Url)
-            && !string.IsNullOrEmpty(config.Extra.LokiSettings.Login)
-            && !string.IsNullOrEmpty(config.Extra.LokiSettings.Password))
-        {
-            Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-                .MinimumLevel.Override("Grpc", LogEventLevel.Warning)
-                .Enrich.FromLogContext()
-                .Enrich.WithMachineName()
-                .Enrich.WithProperty("Preset", options.Preset)
-                .WriteTo.GrafanaLoki(config.Extra.LokiSettings.Url,
-                    credentials: new LokiCredentials
-                    {
-                        Login = config.Extra.LokiSettings.Login,
-                        Password = config.Extra.LokiSettings.Password
-                    },
-                    createLevelLabel: true,
-                    useInternalTimestamp: true,
-                    filtrationMode: LokiLabelFiltrationMode.Include,
-                    filtrationLabels: new [] { "MachineName", "Preset" },
-                    textFormatter: new LokiJsonTextFormatter(),
-                    outputTemplate: "[{Level:u3}] {Message:lj}{NewLine}{Exception}")
-                .WriteTo.Async(a => a.Console())
-                .WriteTo.File($"logs/{logPrefix}-.txt",
-                    rollingInterval: RollingInterval.Day)
-                .CreateLogger();
-        }
-
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
-
         Log.Information("AssettoServer {Version}", ThisAssembly.AssemblyInformationalVersion);
-        if (!string.IsNullOrEmpty(options.Preset))
+        
+        try
         {
-            Log.Information("Using preset {Preset}", options.Preset);
-        }
-        
-        var host = Host.CreateDefaultBuilder()
-            .UseServiceProviderFactory(new AutofacServiceProviderFactory())
-            .UseSerilog()
-            .ConfigureWebHostDefaults(webHostBuilder =>
+            var config = new ACServerConfiguration(options.Preset, options.ServerCfgPath, options.EntryListPath,
+                options.LoadPluginsFromWorkdir);
+
+            if (config.Extra.LokiSettings != null
+                && !string.IsNullOrEmpty(config.Extra.LokiSettings.Url)
+                && !string.IsNullOrEmpty(config.Extra.LokiSettings.Login)
+                && !string.IsNullOrEmpty(config.Extra.LokiSettings.Password))
             {
-                webHostBuilder.ConfigureKestrel(serverOptions => serverOptions.AllowSynchronousIO = true)
-                    .UseStartup(_ => new Startup(config))
-                    .UseUrls($"http://0.0.0.0:{config.Server.HttpPort}");
-            })
-            .Build();
-        
-        await host.RunAsync();
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Debug()
+                    .MinimumLevel.Override("AssettoServer.Network.Http.Authentication.ACClientAuthenticationHandler", LogEventLevel.Warning)
+                    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+                    .MinimumLevel.Override("Grpc", LogEventLevel.Warning)
+                    .Enrich.FromLogContext()
+                    .Enrich.WithMachineName()
+                    .Enrich.WithProperty("Preset", options.Preset)
+                    .WriteTo.GrafanaLoki(config.Extra.LokiSettings.Url,
+                        credentials: new LokiCredentials
+                        {
+                            Login = config.Extra.LokiSettings.Login,
+                            Password = config.Extra.LokiSettings.Password
+                        },
+                        useInternalTimestamp: true,
+                        textFormatter: new LokiJsonTextFormatter(),
+                        propertiesAsLabels: new[] { "MachineName", "Preset" })
+                    .WriteTo.Async(a => a.Console())
+                    .WriteTo.File($"logs/{logPrefix}-.txt",
+                        rollingInterval: RollingInterval.Day)
+                    .CreateLogger();
+            }
+            
+            if (!string.IsNullOrEmpty(options.Preset))
+            {
+                Log.Information("Using preset {Preset}", options.Preset);
+            }
+
+            var host = Host.CreateDefaultBuilder()
+                .UseServiceProviderFactory(new AutofacServiceProviderFactory())
+                .UseSerilog()
+                .ConfigureWebHostDefaults(webHostBuilder =>
+                {
+                    webHostBuilder.ConfigureKestrel(serverOptions => serverOptions.AllowSynchronousIO = true)
+                        .UseStartup(_ => new Startup(config))
+                        .UseUrls($"http://0.0.0.0:{config.Server.HttpPort}");
+                })
+                .Build();
+            
+            await host.RunAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "Error starting server");
+            await Log.CloseAndFlushAsync();
+            ExceptionHelper.PrintExceptionHelp(ex);
+        }
     }
 
     private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs args)

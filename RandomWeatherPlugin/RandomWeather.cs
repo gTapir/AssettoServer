@@ -42,12 +42,15 @@ public class RandomWeather : CriticalBackgroundService, IAssettoServerAutostart
         float prefixSum = 0.0f;
         foreach (var (weather, weight) in _configuration.WeatherWeights)
         {
-            prefixSum += weight / weightSum;
-            _weathers.Add(new WeatherWeight
+            if (weight > 0)
             {
-                Weather = weather,
-                PrefixSum = prefixSum,
-            });
+                prefixSum += weight / weightSum;
+                _weathers.Add(new WeatherWeight
+                {
+                    Weather = weather,
+                    PrefixSum = prefixSum,
+                });
+            }
         }
 
         _weathers.Sort((a, b) =>
@@ -112,7 +115,7 @@ public class RandomWeather : CriticalBackgroundService, IAssettoServerAutostart
                     TemperatureRoad = (float)WeatherUtils.GetRoadTemperature(_weatherManager.CurrentDateTime.TimeOfDay.TickOfDay / 10_000_000.0, last.TemperatureAmbient,
                         nextWeatherType.TemperatureCoefficient),
                     Pressure = last.Pressure,
-                    Humidity = (int)(nextWeatherType.Humidity * 100),
+                    Humidity = nextWeatherType.Humidity,
                     WindSpeed = last.WindSpeed,
                     WindDirection = last.WindDirection,
                     RainIntensity = last.RainIntensity,
