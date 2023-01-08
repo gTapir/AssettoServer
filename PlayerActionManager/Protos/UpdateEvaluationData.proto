@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option csharp_namespace = "PlayerActionManager";
+
+package UpdateEvaluationData;
+
+// The greeting service definition.
+service EvaluationData {
+  // Sends a greeting
+  rpc UpdateEvaluationData (EvaluationDataRequest) returns (EvaluationDataResponse);
+}
+
+// The request message containing the data of the connected User.
+message EvaluationDataRequest {
+  string GamerTag = 1;
+  string SteamID = 2;
+  string CurrentServerIP = 3;
+  string CurrentCarName = 4;
+}
+
+// The response message containing the result.
+message EvaluationDataResponse {
+  string ErrorMessage = 1;
+}

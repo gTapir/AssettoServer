@@ -1,27 +1,54 @@
 ﻿using AssettoServer.Server;
+using AssettoServer.Server.GeoParams;
 using AssettoServer.Server.Plugin;
-using AssettoServer.Utils;
-using Microsoft.Extensions.Hosting;
-using RestSharp;
+using Grpc.Net.Client;
 using Serilog;
 
 namespace PlayerActionManager;
 
-public class PlayerAction
+public class PlayerAction : IAssettoServerAutostart
 {
     private EntryCarManager mEntryCarManager { get; set; }
+    public GeoParamsManager mGeoParamsManager { get; set; }
 
-    public PlayerAction(EntryCarManager entrycarManager)
+    public PlayerAction(EntryCarManager entrycarManager, GeoParamsManager geoParamsManager)
     {
         mEntryCarManager = entrycarManager;
+        mGeoParamsManager = geoParamsManager;
+
         mEntryCarManager.ClientConnected += mEntryCarManager_ClientConnected;
     }
 
-    private void mEntryCarManager_ClientConnected(AssettoServer.Network.Tcp.ACTcpClient sender, EventArgs args)
+    private async void mEntryCarManager_ClientConnected(AssettoServer.Network.Tcp.ACTcpClient sender, EventArgs args)
     {
-        var client = new RestClient(/*Hier Base URL einfügen*/);
-        var request = new RestRequest(/*Hier konkreten Pfad angeben zum Controller und zur Methode*/);
-        request.AddObject(/*Hier muss das Requestmodel gebaut werden*/);
-        var response = client.Post</*ResponseModel einfügen*/>(request);
+        try
+        {
+            using (var channel = GrpcChannel.ForAddress("https://localhost:5001"))
+            {
+                var client = new EvaluationData.EvaluationDataClient(channel);
+                _ = await client.UpdateEvaluationDataAsync(new EvaluationDataRequest()
+                {
+                    SteamID = sender.Guid.ToString(),
+                    GamerTag = sender.Name,
+                    CurrentServerIP = mGeoParamsManager.GeoParams.Ip,
+                    CurrentCarName = sender.EntryCar.Model
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Request to backend failed with error: {ex.Message}");
+        }
+        
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
     }
 }

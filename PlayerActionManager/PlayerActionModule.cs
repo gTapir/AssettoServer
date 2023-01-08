@@ -1,5 +1,6 @@
 ﻿using AssettoServer.Server.Plugin;
 using Autofac;
+using Serilog;
 
 namespace PlayerActionManager;
 
