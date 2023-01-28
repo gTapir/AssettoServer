@@ -108,7 +108,10 @@ public class WeatherManager : CriticalBackgroundService
             }
             else
             {
-                throw new ConfigurationException($"No track params found for {_configuration.Server.Track}. More info: https://github.com/compujuckel/AssettoServer/wiki/Common-configuration-errors#missing-track-params");
+                throw new ConfigurationException($"No track params found for {_configuration.Server.Track}. More info: https://assettoserver.org/docs/common-configuration-errors#missing-track-params")
+                {
+                    HelpLink = "https://assettoserver.org/docs/common-configuration-errors#missing-track-params"
+                };
             }
         }
         else if (string.IsNullOrEmpty(TrackParams.Timezone))
@@ -120,7 +123,10 @@ public class WeatherManager : CriticalBackgroundService
             }
             else
             {
-                throw new ConfigurationException($"No time zone found for {_configuration.Server.Track}. More info: https://github.com/compujuckel/AssettoServer/wiki/Common-configuration-errors#missing-track-params");
+                throw new ConfigurationException($"No time zone found for {_configuration.Server.Track}. More info: https://assettoserver.org/docs/common-configuration-errors#missing-track-params")
+                {
+                    HelpLink = "https://assettoserver.org/docs/common-configuration-errors#missing-track-params"
+                };
             }
         }
         else
@@ -154,7 +160,7 @@ public class WeatherManager : CriticalBackgroundService
                     CurrentDateTime += Duration.FromMilliseconds((_timeSource.ServerTimeMilliseconds - lastTimeUpdate) * _configuration.Server.TimeOfDayMultiplier);
                 }
                 
-                _rainHelper.Update(CurrentWeather, _configuration.Server.DynamicTrack?.BaseGrip ?? 1, _configuration.Extra.RainTrackGripReductionPercent, _timeSource.ServerTimeMilliseconds - lastTimeUpdate);
+                _rainHelper.Update(CurrentWeather, _configuration.Server.DynamicTrack.BaseGrip, _configuration.Extra.RainTrackGripReductionPercent, _timeSource.ServerTimeMilliseconds - lastTimeUpdate);
                 _weatherImplementation.SendWeather(CurrentWeather, CurrentDateTime);
                 lastTimeUpdate = _timeSource.ServerTimeMilliseconds;
             }

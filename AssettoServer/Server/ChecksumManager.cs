@@ -31,18 +31,21 @@ public class ChecksumManager
         CarChecksums = CalculateCarChecksums(carModels, _configuration.Extra.EnableAlternativeCarChecksums);
         Log.Information("Initialized {Count} car checksums", CarChecksums.Select(car => car.Value.Count).Sum());
 
-        var modelsWithoutChecksums = carModels.Except(CarChecksums.Keys).ToList();
+        var modelsWithoutChecksums = CarChecksums.Where(c => c.Value.Count == 0).Select(c => c.Key).ToList();
         if (modelsWithoutChecksums.Count > 0)
         {
             string models = string.Join(", ", modelsWithoutChecksums);
 
             if (_configuration.Extra.IgnoreConfigurationErrors.MissingCarChecksums)
             {
-                Log.Warning("No data.acd found for {CarModels}. This will allow players to cheat using modified data. More info: https://github.com/compujuckel/AssettoServer/wiki/Common-configuration-errors#missing-car-checksums", models);
+                Log.Warning("No data.acd found for {CarModels}. This will allow players to cheat using modified data. More info: https://assettoserver.org/docs/common-configuration-errors#missing-car-checksums", models);
             }
             else
             {
-                throw new ConfigurationException($"No data.acd found for {models}. This will allow players to cheat using modified data. More info: https://github.com/compujuckel/AssettoServer/wiki/Common-configuration-errors#missing-car-checksums");
+                throw new ConfigurationException($"No data.acd found for {models}. This will allow players to cheat using modified data. More info: https://assettoserver.org/docs/common-configuration-errors#missing-car-checksums")
+                {
+                    HelpLink = "https://assettoserver.org/docs/common-configuration-errors#missing-car-checksums"
+                };
             }
         }
     }

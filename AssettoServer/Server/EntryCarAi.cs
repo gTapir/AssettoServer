@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Numerics;
 using System.Threading;
 using AssettoServer.Network.Packets.Outgoing;
 using AssettoServer.Server.Ai;
-using AssettoServer.Server.Configuration;
+using AssettoServer.Server.Ai.Splines;
 
 namespace AssettoServer.Server;
 
@@ -38,17 +39,18 @@ public partial class EntryCar
     private readonly ReaderWriterLockSlim _aiStatesLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
     
     private readonly Func<EntryCar, AiState> _aiStateFactory;
+    private readonly AiSpline? _spline;
 
     private void AiInit()
     {
         AiName = $"{_configuration.Extra.AiParams.NamePrefix} {SessionId}";
         SetAiOverbooking(0);
 
-        _configuration.Reload += OnConfigReload;
-        OnConfigReload(_configuration, EventArgs.Empty);
+        _configuration.Extra.AiParams.PropertyChanged += OnConfigReload;
+        OnConfigReload(_configuration, new PropertyChangedEventArgs(string.Empty));
     }
 
-    private void OnConfigReload(ACServerConfiguration sender, EventArgs _)
+    private void OnConfigReload(object? sender, PropertyChangedEventArgs args)
     {
         AiSplineHeightOffsetMeters = _configuration.Extra.AiParams.SplineHeightOffsetMeters;
         AiAcceleration = _configuration.Extra.AiParams.DefaultAcceleration;
@@ -208,17 +210,21 @@ public partial class EntryCar
         }
     }
 
-    public bool IsPositionSafe(TrafficSplinePoint point)
+    public bool IsPositionSafe(int pointId)
     {
+        ArgumentNullException.ThrowIfNull(_spline);
+        
         _aiStatesLock.EnterReadLock();
         try
         {
+            var ops = _spline.Operations;
+            
             for (var i = 0; i < _aiStates.Count; i++)
             {
                 var aiState = _aiStates[i];
                 if (aiState.Initialized 
-                    && Vector3.DistanceSquared(aiState.Status.Position, point.Position) < aiState.SafetyDistanceSquared
-                    && aiState.CurrentSplinePoint.IsSameDirection(point))
+                    && Vector3.DistanceSquared(aiState.Status.Position, ops.Points[pointId].Position) < aiState.SafetyDistanceSquared
+                    && ops.IsSameDirection(aiState.CurrentSplinePointId, pointId))
                 {
                     return false;
                 }
@@ -292,6 +298,7 @@ public partial class EntryCar
                 _aiStatesLock.EnterWriteLock();
                 try
                 {
+                    aiState.Despawn();
                     _aiStates.Remove(aiState);
                 }
                 finally
@@ -410,6 +417,10 @@ public partial class EntryCar
         _aiStatesLock.EnterWriteLock();
         try
         {
+            foreach (var state in _aiStates)
+            {
+                state.Despawn();
+            }
             _aiStates.Clear();
             _aiStates.Add(_aiStateFactory(this));
         }
