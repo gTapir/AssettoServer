@@ -6,6 +6,7 @@ using AssettoServer.Server;
 using AssettoServer.Server.Plugin;
 using AssettoServer.Network.Tcp;
 using Serilog;
+using System.Text;
 
 namespace TimeAttackPlugin;
 
@@ -21,7 +22,7 @@ public class TimeAttack : IAssettoServerAutostart
     private static void IncomingTimeAttackResult(ACTcpClient client, PacketReader reader)
     {
         Log.Debug($"Recieved a message from {client.Name}. Trying to read it now...");
-        string value = reader.ReadUTF32String();
+        string value = reader.ReadStringFixed(Encoding.UTF8, 31);
         Log.Debug($"Read content of TimeAttack message. It contained the following: {value}");
     }
 
