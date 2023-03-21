@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Linq;
+using System.Runtime.Loader;
 using AssettoServer.Server.Configuration;
 using McMaster.NETCore.Plugins;
 using Serilog;
@@ -53,7 +56,7 @@ public class ACPluginLoader
     {
         if (!AvailablePlugins.TryGetValue(name, out var loader))
         {
-            throw new ArgumentException($"No plugin found with name {name}");
+            throw new ConfigurationException($"No plugin found with name {name}");
         }
         
         var assembly = loader.LoadDefaultAssembly();

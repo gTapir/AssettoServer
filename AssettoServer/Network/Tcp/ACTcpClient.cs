@@ -254,7 +254,7 @@ public class ACTcpClient
     {
         byte[] buffer = new byte[2046];
         NetworkStream stream = TcpStream;
-
+        
         try
         {
             while (!DisconnectTokenSource.IsCancellationRequested)
@@ -307,6 +307,8 @@ public class ACTcpClient
                         SendPacket(new WrongPasswordResponse());
                     else if (!_sessionManager.CurrentSession.Configuration.IsOpen)
                         SendPacket(new SessionClosedResponse());
+                    else if (Name.Length == 0)
+                        SendPacket(new AuthFailedResponse("Driver name cannot be empty."));
                     else if (!_cspFeatureManager.ValidateHandshake(cspFeatures))
                         SendPacket(new AuthFailedResponse("Missing CSP features. Please update CSP and/or Content Manager."));
                     else if ((response = await _openSlotFilter.ShouldAcceptConnectionAsync(this, handshakeRequest)).HasValue)
@@ -860,9 +862,9 @@ public class ACTcpClient
         {
             if (Interlocked.CompareExchange(ref _disconnectRequested, 1, 0) == 1)
                 return;
-
+            
             await Task.Yield();
-
+            
             if (!string.IsNullOrEmpty(Name))
             {
                 Logger.Debug("Disconnecting {ClientName} ({$ClientIpEndpoint})", Name, TcpClient.Client.RemoteEndPoint);
